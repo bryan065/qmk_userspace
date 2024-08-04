@@ -1,0 +1,14 @@
+DEBOUNCE_TYPE = asym_eager_defer_pk
+TAP_DANCE_ENABLE = yes
+USB_WAIT_FOR_ENUMERATION = yes
+RGB_MATRIX_CUSTOM_USER = yes
+
+# Via support
+VIA_ENABLE = yes
+LTO_ENABLE = yes
+
+# Firmware size reduction
+SPACE_CADET_ENABLE = no
+GRAVE_ESC_ENABLE = no
+MOUSEKEY_ENABLE = no
+COMMAND_ENABLE = no
