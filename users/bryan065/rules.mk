@@ -2,6 +2,7 @@ DEBOUNCE_TYPE = asym_eager_defer_pk
 TAP_DANCE_ENABLE = yes
 USB_WAIT_FOR_ENUMERATION = yes
 RGB_MATRIX_CUSTOM_USER = yes
+OS_DETECTION_ENABLE = yes
 
 # Via support
 VIA_ENABLE = yes

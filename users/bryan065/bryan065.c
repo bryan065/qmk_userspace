@@ -72,17 +72,17 @@ struct RGB_INDICATOR indicator_matrix[8] = {
     {   false,          // _FUNCTION indicator
         {0, 0, 0},
         true,           // _FUNCTION per-key
-        {0, 1, 1}
+        {0, 0, 1}
     },
     {   true,           // _RGB indicator
         {0, 255, 0},
         true,           // _RGB per-key
-        {0, 1, 1}
+        {0, 0, 1}
     },
     {   true,           // _SYSTEM indicator
         {0, 255, 0},
         true,           // _SYSTEM per-key
-        {0, 1, 1}
+        {0, 0, 1}
     }
 };
 
@@ -201,8 +201,26 @@ void keyboard_post_init_user(void) {
                     case KC_BSLS:       // Replace KC_BSLS with VRSN on _SYSTEM layer
                             dynamic_keymap_set_keycode(_SYSTEM, row, col, VRSN);
                         break;
-                    case RGB_MOD:       // Replace RGB_MOD with RGB_DEF on _SYSTEM layer
-                            dynamic_keymap_set_keycode(_SYSTEM, row, col, RGB_DEF);
+                    case KC_ENT:        // Replace KC_ENT with QK_MAKE on _SYSTEM layer
+                            dynamic_keymap_set_keycode(_SYSTEM, row, col, QK_MAKE);
+                        break;
+                    case KC_ESC:        // Replace KC_ESC with EE_CLR on _SYSTEM layer
+                            dynamic_keymap_set_keycode(_SYSTEM, row, col, EE_CLR);
+                        break;
+                    case KC_B:          // Replace KC_B with QK_BOOT on _SYSTEM layer
+                            dynamic_keymap_set_keycode(_SYSTEM, row, col, QK_BOOT);
+                        break;
+                    case KC_N:          // Replace KC_N with QK_MAKE on _SYSTEM layer
+                            dynamic_keymap_set_keycode(_SYSTEM, row, col, NK_TOGG);
+                        break;
+                    case KC_RGUI:       // Replace KC_LGUI/RGUI with GU_TOGG on _SYSTEM layer
+                    case KC_LGUI:
+                            dynamic_keymap_set_keycode(_SYSTEM, row, col, GU_TOGG);
+                        break;
+                    case KC_RSFT:       // Replace KC_RSFT with MAG_UP on _BASE layer if MAGIC_KC_UP is enabled
+                        #ifdef MAGIC_KC_UP
+                            dynamic_keymap_set_keycode(_BASE, row, col, MAG_UP);
+                        #endif
                         break;
                 }
             }
@@ -223,6 +241,48 @@ void suspend_wakeup_init_user(void) {
     // code will run on keyboard wakeup
     suspend_wakeup_init_rgb();
 }*/
+
+bool process_detected_host_os_user(os_variant_t detected_os) {
+    // Search for specific keys and replace on OS detection
+    for (uint8_t layer = 0; layer < _LAYER_SAFE_RANGE; ++layer) {
+        for (uint8_t row = 0; row < MATRIX_ROWS; ++row) {
+            for (uint8_t col = 0; col < MATRIX_COLS; ++col) {
+                uint16_t keycheck = keymap_key_to_keycode(layer, (keypos_t){col,row});
+                switch(keycheck) {
+                    case KC_V:       // Replace KC_V with ***_VER on _SYSTEM layer
+                            switch (detected_os) {
+                                case OS_WINDOWS:
+                                    dynamic_keymap_set_keycode(_SYSTEM, row, col, WIN_VER);
+                                    break;
+                                case OS_MACOS:
+                                    dynamic_keymap_set_keycode(_SYSTEM, row, col, MAC_VER);
+                                    break;
+                                case OS_LINUX:
+                                case OS_IOS:
+                                case OS_UNSURE:
+                                    break;
+                                }
+                        break;
+                }
+            }
+        }
+    }
+
+    // MacOS cmd/option key detection and swap
+    switch (detected_os) {
+        case OS_WINDOWS:
+            keymap_config.swap_lalt_lgui = keymap_config.swap_ralt_rgui = false;
+            break;
+        case OS_IOS:
+        case OS_MACOS:
+            keymap_config.swap_lalt_lgui = keymap_config.swap_ralt_rgui = true;
+            break;
+        case OS_LINUX:
+        case OS_UNSURE:
+            break;
+        }
+    return true;
+}
 
 //============Userspace and keymap custom keycodes================//
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
@@ -245,6 +305,21 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         case VRSN:          // Prints QMK firmware version information
             if (record->event.pressed) {
                 send_string_with_delay_P(PSTR(QMK_KEYBOARD "/" QMK_KEYMAP " @ " QMK_VERSION ", Built on: " QMK_BUILDDATE), TAP_CODE_DELAY);
+            }
+            return false;
+        case WIN_VER:        // Opens Windows info screen
+            if (record->event.pressed) {
+                tap_code16(LGUI(KC_PAUS));
+            }
+            return false;
+        case MAC_VER:       // Opens MacOS info screen
+            if (record->event.pressed) {
+                tap_code16(LGUI(KC_F1));
+            }
+            return false;
+        case WIN_CPY:       // Copies open Window
+            if (record->event.pressed) {
+                tap_code16(LALT(KC_PSCR));
             }
             return false;
         default:

@@ -34,10 +34,15 @@ struct RGB_INDICATOR {
     HSV hsv_op;
 };
 
-extern struct RGB_INDICATOR indicator_matrix[8];
-extern struct RGB_INDICATOR indicator_underglow[8];
+#ifdef LAYER_STATE_8BIT
+    extern struct RGB_INDICATOR indicator_matrix[8];
+    extern struct RGB_INDICATOR indicator_underglow[8];
+#else
+#   error Only supports up to 8 layers for now.
+#endif
 
 // Define custom values if not defined in config.h
+// Startup animation duration
 #if STARTUP_ANIM_TIME < 0
 #   error STARTUP_ANIM_TIME must be greater than 0
 #elif !defined (STARTUP_ANIM_TIME)
