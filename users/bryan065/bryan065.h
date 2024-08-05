@@ -23,6 +23,9 @@ enum userspace_custom_keycodes {
     KC_CAPSOFF,         // Caps off keycode
     RGB_DEF,
     MON_OFF,
+    WIN_VER,
+    MAC_VER,
+    WIN_CPY,
     NEW_SAFE_RANGE
 };
 
