@@ -156,14 +156,17 @@ __attribute__((weak)) void suspend_wakeup_init_user(void) {
     suspend_wakeup_init_rgb();
 }
 
-
-
-HSV          rgb_original_hsv;
 uint16_t     boot_timer;
 int8_t       boot_status = 0;
 bool         rgb_mod_flag;
 
 //===============Custom Functions=========================//
+
+/* Boot_status
+*   0 = Don't run anim / anim complete
+*   1 = Run splash boot animation intro
+*   2 = Run splash boot animation outro
+*/
 
 // Splash animation math
 HSV SPLASH_math2(HSV hsv, int16_t dx, int16_t dy, uint8_t dist, uint16_t tick) {
@@ -178,8 +181,9 @@ HSV SPLASH_math2(HSV hsv, int16_t dx, int16_t dy, uint8_t dist, uint16_t tick) {
 void rgb_matrix_boot_anim(uint8_t boot_anim) {
     #if defined(RGB_MATRIX_ENABLE)
         if (rgb_matrix_config.enable) {
-            rgb_matrix_sethsv_noeeprom( rgb_matrix_config.hsv.h, rgb_matrix_config.hsv.s, RGB_MATRIX_MAXIMUM_BRIGHTNESS);   // Set brightness to maximum allowed before playing animation
-            rgb_matrix_set_speed_noeeprom(64);                                                                              // Set animation speed to default before playing animation
+            rgb_matrix_sethsv_noeeprom( rgb_matrix_config.hsv.h, 255, RGB_MATRIX_MAXIMUM_BRIGHTNESS);
+            rgb_matrix_set_speed_noeeprom(64);
+
             boot_timer = timer_read();
             boot_status = boot_anim;
         }
@@ -190,18 +194,9 @@ void rgb_matrix_boot_anim(uint8_t boot_anim) {
 
 //==============Layer indicator code==============//
 layer_state_t layer_state_set_kb(layer_state_t state) {
-    switch (get_highest_layer(state)) {
-        case 0:
-            if (rgb_mod_flag != false) { rgb_mod_flag = false; }    // Set rgb_mod_flag to false on the default layer
-            break;                                                  // This is to disable per-key indicator on the default layer
-    }
+    if (get_highest_layer(state) == 0 && rgb_mod_flag) { rgb_mod_flag = false; }    // Set rgb_mod_flag to false on the default layer
     return state = layer_state_set_user(state);
 }
-
-/* Boot_status
-*   1 = Run splash boot animation
-*   0 = Don't run anim / anim complete
-*/
 
 bool rgb_matrix_indicators_advanced_rgb(uint8_t led_min, uint8_t led_max) {
     // Boot animation
@@ -225,11 +220,14 @@ bool rgb_matrix_indicators_advanced_rgb(uint8_t led_min, uint8_t led_max) {
      // Boot animation Code
     switch(boot_status) {
     case 1:
-        if (timer_elapsed(boot_timer) >= STARTUP_ANIM_TIME) {                                                   // If timer is > boot animation time, load the saved RGB mode and fade in
-            rgb_matrix_sethsv_noeeprom( rgb_matrix_config.hsv.h, rgb_matrix_config.hsv.s, rgb_original_hsv.v);  // Reset HSV.v to original value
-            rgb_matrix_set_speed_noeeprom(rgb_matrix_config.speed);                                             // Reset speed to original value
+        if (timer_elapsed(boot_timer) >= STARTUP_ANIM_TIME) {       // If timer is > boot animation time, load the saved RGB mode and settings
             eeprom_read_block(&rgb_matrix_config, EECONFIG_RGB_MATRIX, sizeof(rgb_matrix_config));
-            rgb_matrix_mode_noeeprom(rgb_matrix_config.mode);                                                   // Load original mode
+
+            rgb_matrix_sethsv_noeeprom( rgb_matrix_config.hsv.h, rgb_matrix_config.hsv.s, rgb_matrix_config.hsv.v); // Reset HSV.v to original value
+            rgb_matrix_set_speed_noeeprom(rgb_matrix_config.speed);                                                 // Reset speed to original value
+            rgb_matrix_mode_noeeprom(rgb_matrix_config.mode);                                                       // Load original mode
+
+            // Finish boot
             boot_status = 0;
         } else {                                                                                                // Otherwise, run boot animation
             rgb_matrix_boot_anim_runner(BOOT_ANIM_X,BOOT_ANIM_Y);
@@ -237,10 +235,13 @@ bool rgb_matrix_indicators_advanced_rgb(uint8_t led_min, uint8_t led_max) {
         break;
     case 2:
         if (timer_elapsed(boot_timer) >= STARTUP_ANIM_TIME) {                                                   // If timer is > boot animation time, load the saved RGB mode and fade in
-            rgb_matrix_sethsv_noeeprom( rgb_matrix_config.hsv.h, rgb_matrix_config.hsv.s, rgb_original_hsv.v);  // Reset HSV.v to original value
-            rgb_matrix_set_speed_noeeprom(rgb_matrix_config.speed);                                             // Reset speed to original value
-            rgb_matrix_disable_noeeprom();
+            eeprom_read_block(&rgb_matrix_config, EECONFIG_RGB_MATRIX, sizeof(rgb_matrix_config));
 
+            rgb_matrix_sethsv_noeeprom( rgb_matrix_config.hsv.h, rgb_matrix_config.hsv.s, rgb_matrix_config.hsv.v); // Reset HSV.v to original value
+            rgb_matrix_set_speed_noeeprom(rgb_matrix_config.speed);                                                 // Reset speed to original value
+            rgb_matrix_mode_noeeprom(rgb_matrix_config.mode);                                                       // Load original mode
+
+            // Finish boot
             boot_status = 0;
         } else {                                                                                                // Otherwise, run boot animation
             rgb_matrix_boot_anim_runner(112,64);
@@ -254,40 +255,31 @@ bool rgb_matrix_indicators_advanced_rgb(uint8_t led_min, uint8_t led_max) {
 
         // Underglow layer indication
         HSV underglow_hsv = indicator_underglow[layer].hsv;
-        if (indicator_underglow[layer].hsv.v == 1) {
-            underglow_hsv.v = rgb_matrix_config.hsv.v;
-        }
-        else if (indicator_underglow[layer].hsv.v > RGB_MATRIX_MAXIMUM_BRIGHTNESS) {
-            underglow_hsv.v = RGB_MATRIX_MAXIMUM_BRIGHTNESS;
-        }
+        underglow_hsv.v   = indicator_underglow[layer].hsv.v == 1                            ? rgb_matrix_config.hsv.v :
+                            indicator_underglow[layer].hsv.v > RGB_MATRIX_MAXIMUM_BRIGHTNESS ? RGB_MATRIX_MAXIMUM_BRIGHTNESS :
+                                                                                               indicator_underglow[layer].hsv.v;
 
         //apply the colors to the layers, if configured. Otherwise, the user's RGB mode will show through
         if (indicator_underglow[layer].flag) {
             for (uint8_t i = led_min; i <= led_max; i++) {
                 if (HAS_FLAGS(g_led_config.flags[i], 0x02)) { // 0x02 == LED_FLAG_UNDERGLOW
                     RGB underglow_rgb = hsv_to_rgb(underglow_hsv);
-                    rgb_matrix_set_color(i, underglow_rgb.r, underglow_rgb.g, underglow_rgb.b);
+                    RGB_MATRIX_INDICATOR_SET_COLOR(i, underglow_rgb.r, underglow_rgb.g, underglow_rgb.b);
                 }
             }
         } // End of underglow layer indicator
 
         // Layer indicator ONLY on the RGB_MATRIX (not underglow, excluding per key indicator)
         HSV matrix_hsv = indicator_matrix[layer].hsv;
-        if (indicator_matrix[layer].hsv.v == 1) {
-            matrix_hsv.v = rgb_matrix_config.hsv.v;
-        }
-        else if (indicator_matrix[layer].hsv.v > RGB_MATRIX_MAXIMUM_BRIGHTNESS) {
-            matrix_hsv.v = RGB_MATRIX_MAXIMUM_BRIGHTNESS;
-        }
+        matrix_hsv.v   = indicator_matrix[layer].hsv.v == 1                                 ? rgb_matrix_config.hsv.v :
+                         indicator_matrix[layer].hsv.v > RGB_MATRIX_MAXIMUM_BRIGHTNESS      ? RGB_MATRIX_MAXIMUM_BRIGHTNESS :
+                                                                                              indicator_matrix[layer].hsv.v;
 
         // Per Key indicator ONLY on the RGB_MATRIX
         HSV perkey_hsv = indicator_matrix[layer].hsv_op;
-        if (indicator_matrix[layer].hsv_op.v == 1) {
-            perkey_hsv.v = rgb_matrix_config.hsv.v;
-        }
-        else if (indicator_matrix[layer].hsv_op.v > RGB_MATRIX_MAXIMUM_BRIGHTNESS) {
-            perkey_hsv.v = RGB_MATRIX_MAXIMUM_BRIGHTNESS;
-        }
+        perkey_hsv.v   = indicator_matrix[layer].hsv_op.v == 1                              ? rgb_matrix_config.hsv.v :
+                         indicator_matrix[layer].hsv_op.v > RGB_MATRIX_MAXIMUM_BRIGHTNESS   ? RGB_MATRIX_MAXIMUM_BRIGHTNESS :
+                                                                                              indicator_matrix[layer].hsv_op.v;
 
         for (uint8_t row = 0; row < MATRIX_ROWS; ++row) {
             for (uint8_t col = 0; col < MATRIX_COLS; ++col) {
@@ -314,16 +306,7 @@ bool rgb_matrix_indicators_advanced_rgb(uint8_t led_min, uint8_t led_max) {
                             perkey_hsv.s = 255;
                             break;
 
-                        /* Per key overrides with toggle colors
-                            *
-                            *   Set the hue in the first `if statement`  for the color when toggled on
-                            *   Set the hue in the second `if statement` for the color when toggled off
-                            *      If you don't want to set a second color when toggled off, replace `hsv.h` with `goto perkey;`
-                            *
-                            *  hsv.h = hue
-                            *  hsv.s = saturation
-                            *  hsv.v = DO NOT CHANGE
-                            */
+                        // Per key overrides with toggle colors
                         case NK_TOGG:
                             if (keymap_config.nkro == 1) {
                                 perkey_hsv.h = 85; // GREEN if nkro is enabled
@@ -355,47 +338,52 @@ bool rgb_matrix_indicators_advanced_rgb(uint8_t led_min, uint8_t led_max) {
                         // Apply color to configured keys aka per-key indicator
                         if (indicator_matrix[layer].flag_op) {
                             RGB perkey_rgb = hsv_to_rgb(perkey_hsv);
-                            rgb_matrix_set_color(index, perkey_rgb.r, perkey_rgb.g, perkey_rgb.b);
+                            RGB_MATRIX_INDICATOR_SET_COLOR(index, perkey_rgb.r, perkey_rgb.g, perkey_rgb.b);
                         }
                     } else {
                         //Apply colors to the non-configured keys aka layer indicator. Otherwise, the user's RGB mode will show through
                         if (indicator_matrix[layer].flag) {
                             RGB matrix_rgb = hsv_to_rgb(matrix_hsv);
-                            rgb_matrix_set_color(index, matrix_rgb.r, matrix_rgb.g, matrix_rgb.b);
+                            RGB_MATRIX_INDICATOR_SET_COLOR(index, matrix_rgb.r, matrix_rgb.g, matrix_rgb.b);
                         }
                     }
                 } // End of comparison code
             }
         } // End of per configured key indicator
-
     } // End of layer indicator code
 
-    #if defined(PRODUCT) && USB_DEVICE_PRODUCT_NAME == Cyber77
-        // Caps lock / num lock code
-        if (host_keyboard_led_state().caps_lock) {
-            HSV hsv = rgb_matrix_config.hsv;
-            hsv.s = 1;                                                                  // Use white LED for indicator
+    // Caps/num lock indicators
+    if (boot_status == 0) {
+        #ifdef CAPS_LED
+            if (host_keyboard_led_state().caps_lock) {
+                HSV hsv = rgb_matrix_config.hsv;
+                hsv.s = 0;                                                                  // Use white LED for indicator
 
-            if (hsv.v < 100) { hsv.v = 100; }                                           // Ensure the caps/num lock has a minimum brightness and doesn't exceed the defined max brightness
-            else if (hsv.v < (RGB_MATRIX_MAXIMUM_BRIGHTNESS - 30)) { hsv.v += 30; }     //   Also makes the caps/num lock a bit brighter than the rest of the LED's
-            else { hsv.v = RGB_MATRIX_MAXIMUM_BRIGHTNESS; }
+                // Ensure LED always has a minimum/maximum brightness
+                hsv.v = rgb_matrix_config.hsv.v < 100                                  ? 100 :
+                        rgb_matrix_config.hsv.v > RGB_MATRIX_MAXIMUM_BRIGHTNESS        ? RGB_MATRIX_MAXIMUM_BRIGHTNESS :
+                                                                                        hsv.v;
 
+                RGB rgb = hsv_to_rgb(hsv);
+                RGB_MATRIX_INDICATOR_SET_COLOR(CAPS_LED, rgb.r, rgb.g, rgb.b);
+            }
+        #endif
 
-            RGB rgb = hsv_to_rgb(hsv);
-            RGB_MATRIX_INDICATOR_SET_COLOR(3, rgb.r, rgb.g, rgb.b);                     // Assuming caps lock is at led #3
-        }
-        if (host_keyboard_led_state().num_lock) {
-            HSV hsv = rgb_matrix_config.hsv;
-            hsv.s = 1;
+        #ifdef NUMLK_LED
+            if (host_keyboard_led_state().num_lock) {
+                HSV hsv = rgb_matrix_config.hsv;
+                hsv.s = 0;
 
-            if (hsv.v < 100) { hsv.v = 100; }
-            else if (hsv.v < (RGB_MATRIX_MAXIMUM_BRIGHTNESS - 30)) { hsv.v += 30; }
-            else { hsv.v = RGB_MATRIX_MAXIMUM_BRIGHTNESS; }
+                // Ensure LED always has a minimum/maximum brightness
+                hsv.v = rgb_matrix_config.hsv.v < 100                                  ? 100 :
+                        rgb_matrix_config.hsv.v > RGB_MATRIX_MAXIMUM_BRIGHTNESS        ? RGB_MATRIX_MAXIMUM_BRIGHTNESS :
+                                                                                        hsv.v;
 
-            RGB rgb = hsv_to_rgb(hsv);
-            RGB_MATRIX_INDICATOR_SET_COLOR(5, rgb.r, rgb.g, rgb.b);                     // Assuming num lock is at led #5
-        } // End of caps/num lock code
-    #endif
+                RGB rgb = hsv_to_rgb(hsv);
+                RGB_MATRIX_INDICATOR_SET_COLOR(NUMLK_LED, rgb.r, rgb.g, rgb.b);
+            }
+        #endif
+    }
     return true;
 }
 //==============Layer indicator code end==========//
@@ -437,33 +425,35 @@ bool process_record_rgb(uint16_t keycode, keyrecord_t *record) {
             }
             return true;
         case RGB_TOG:   // Override original RGB_TOG function to handle RGB_MATRIX caps/numlock indicator
-            #if defined(RGB_MATRIX_ENABLE) && (defined(PRODUCT) && USB_DEVICE_PRODUCT_NAME == Cyber77)
-            if (!record->event.pressed) {
-                    if (rgb_matrix_config.hsv.v > 0) {
-                        rgb_original_hsv = rgb_matrix_config.hsv;
-                        rgb_matrix_sethsv_noeeprom( rgb_original_hsv.h, rgb_original_hsv.s, 0);
-                    } else {
-                        rgb_matrix_sethsv_noeeprom( rgb_original_hsv.h, rgb_original_hsv.s, rgb_original_hsv.v);
-                    }
-            }
+            #if defined(RGB_MATRIX_ENABLE) && (defined(CAPS_LED) || defined(NUMLK_LED))
+                if (!record->event.pressed) {
+                        if (rgb_matrix_config.hsv.v > 0) {
+                            rgb_matrix_sethsv_noeeprom( rgb_matrix_config.hsv.h, rgb_matrix_config.hsv.s, 0);
+                        } else {
+                            eeprom_read_block(&rgb_matrix_config, EECONFIG_RGB_MATRIX, sizeof(rgb_matrix_config));
+                            rgb_matrix_sethsv_noeeprom( rgb_matrix_config.hsv.h, rgb_matrix_config.hsv.s, rgb_matrix_config.hsv.v);
+                        }
+                }
+                return false;
+            #else
+                return true;
             #endif
-            return false;
         case RGB_DEF:
             #ifdef RGB_MATRIX_ENABLE
-            if (record->event.pressed) {
-                // Set default mode
-                #ifdef RGB_MATRIX_DEFAULT_MODE
-                    rgb_matrix_mode(RGB_MATRIX_DEFAULT_MODE);
-                #else
-                    rgb_matrix_mode(RGB_MATRIX_SOLID_COLOR);
-                #endif
+                if (record->event.pressed) {
+                    // Set default mode
+                    #ifdef RGB_MATRIX_DEFAULT_MODE
+                        rgb_matrix_mode(RGB_MATRIX_DEFAULT_MODE);
+                    #else
+                        rgb_matrix_mode(RGB_MATRIX_SOLID_COLOR);
+                    #endif
 
-                // Set default speed/hue/saturation
-                rgb_matrix_set_speed(RGB_MATRIX_DEFAULT_SPD);
-                rgb_matrix_sethsv(RGB_MATRIX_DEFAULT_HUE, RGB_MATRIX_DEFAULT_SAT, RGB_MATRIX_DEFAULT_VAL);
-            } else {
-                rgb_mod_flag = true;
-            }
+                    // Set default speed/hue/saturation
+                    rgb_matrix_set_speed(RGB_MATRIX_DEFAULT_SPD);
+                    rgb_matrix_sethsv(RGB_MATRIX_DEFAULT_HUE, RGB_MATRIX_DEFAULT_SAT, RGB_MATRIX_DEFAULT_VAL);
+                } else {
+                    rgb_mod_flag = true;
+                }
             #endif
             return false;
         default:
