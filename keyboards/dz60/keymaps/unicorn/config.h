@@ -7,6 +7,7 @@
 
 #define PRODUCT "DZ60 Unicorn"
 #define PRODUCT_ID 0x2261
+#define MAGIC_KC_UP
 
 // RGB Matrix
 #ifdef RGB_MATRIX_ENABLE
