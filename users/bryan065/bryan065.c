@@ -22,6 +22,9 @@
 // Comment out to disable custom RGB features
 #include "custom_rgb.h"
 
+bool magic_dpad;
+bool magic_buffer;
+
 /* Structure for 'struct RGB_INDICATOR' layer indicator effect
  *   Note: Layer 0 aka base layer should never show any RGB layer indication
  *
@@ -222,6 +225,11 @@ void keyboard_post_init_user(void) {
                             dynamic_keymap_set_keycode(_BASE, row, col, MAG_UP);
                         #endif
                         break;
+                    case KC_RSFT:       // Replace KC_RSFT with MAG_UP on _BASE layer if MAGIC_KC_UP is enabled
+                        #ifdef MAGIC_KC_UP
+                            dynamic_keymap_set_keycode(_BASE, row, col, MAG_UP);
+                        #endif
+                        break;
                 }
             }
         }
@@ -322,7 +330,42 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 tap_code16(LALT(KC_PSCR));
             }
             return false;
+        case MAG_UP:
+            #ifdef MAGIC_KC_UP
+                if (record->event.pressed) {
+                    magic_buffer = true;
+                    if (magic_dpad) {
+                        register_code(KC_UP);
+                    } else {
+                        register_code16(KC_RSFT);
+                    }
+                } else {
+                    if (magic_dpad) {
+                        unregister_code(KC_UP);
+                    } else {
+                        unregister_code16(KC_RSFT);
+                    }
+                    magic_buffer = false;
+                }
+            #endif
+            return false;
+        case KC_UP:
+        case KC_DOWN:
+        case KC_LEFT:
+        case KC_RIGHT:
+            #ifdef MAGIC_KC_UP
+                if (record->event.pressed) {
+                    magic_dpad = true;          // Enable magic_dpad when arrow keys are pressed. Any other key will disable it.
+                }
+            #endif
+            return true;
         default:
+            #ifdef MAGIC_KC_UP
+                if (!record->event.pressed && get_mods() == 0 && !magic_buffer){
+                    magic_dpad = false;         // Disable magic_dpad on any regular keypress
+                }
+            #endif
+
             #ifdef CUSTOM_RGB_H
                 return process_record_rgb(keycode, record);
             #else
