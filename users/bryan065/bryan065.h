@@ -26,6 +26,7 @@ enum userspace_custom_keycodes {
     WIN_VER,
     MAC_VER,
     WIN_CPY,
+    MAG_UP,
     NEW_SAFE_RANGE
 };
 
