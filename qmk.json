@@ -1,4 +1,7 @@
 {
     "userspace_version": "1.0",
-    "build_targets": []
+    "build_targets": [
+        ["dz60", "unicorn"],
+        ["kbdfans/kbd67/mkii_soldered", "cyber77"]
+    ]
 }
