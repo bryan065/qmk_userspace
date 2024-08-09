@@ -34,6 +34,15 @@ struct RGB_INDICATOR {
     HSV hsv_op;
 };
 
+typedef struct BOOT_ANIMATION {
+    bool status;
+    uint16_t timer;
+    struct BOOT_ORIGIN {
+        uint8_t x;
+        uint8_t y;
+    } origin;
+} BOOT_ANIMATION;
+
 #ifdef LAYER_STATE_8BIT
     extern struct RGB_INDICATOR indicator_matrix[8];
     extern struct RGB_INDICATOR indicator_underglow[8];
@@ -41,13 +50,7 @@ struct RGB_INDICATOR {
 #   error Only supports up to 8 layers for now.
 #endif
 
-// Define custom values if not defined in config.h
-// Startup animation duration
-#if STARTUP_ANIM_TIME < 0
-#   error STARTUP_ANIM_TIME must be greater than 0
-#elif !defined (STARTUP_ANIM_TIME)
-#   define STARTUP_ANIM_TIME 2200
-#endif
+#define STARTUP_ANIM_TIME 2500
 
 // Boot animation start position
 #ifndef BOOT_ANIM_X
@@ -57,8 +60,10 @@ struct RGB_INDICATOR {
   #define BOOT_ANIM_Y 0
 #endif
 
-HSV SPLASH_math2(HSV, int16_t, int16_t, uint8_t, uint16_t);
-void rgb_matrix_boot_anim(uint8_t );
+//HSV SPLASH_math_boot(HSV hsv, int16_t dx, int16_t dy, uint8_t dist, uint16_t tick);
+void rgb_matrix_boot_anim_starter(BOOT_ANIMATION *boot, uint8_t originx, uint8_t originy);
+void rgb_matrix_boot_anim_runner(BOOT_ANIMATION *boot, uint8_t led_min, uint8_t led_max);
+void rgb_matrix_boot_anim_end (BOOT_ANIMATION *boot);
 
 // add sub-layer below user level to avoid conflicts at user/keyboard level
 bool process_record_rgb(uint16_t keycode, keyrecord_t *record);
