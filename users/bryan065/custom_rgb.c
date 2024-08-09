@@ -156,41 +156,51 @@ __attribute__((weak)) void suspend_wakeup_init_user(void) {
     suspend_wakeup_init_rgb();
 }
 
-uint16_t     boot_timer;
-int8_t       boot_status = 0;
-bool         rgb_mod_flag;
-
-//===============Custom Functions=========================//
-
-/* Boot_status
-*   0 = Don't run anim / anim complete
-*   1 = Run splash boot animation intro
-*   2 = Run splash boot animation outro
-*/
-
-// Splash animation math
-HSV SPLASH_math2(HSV hsv, int16_t dx, int16_t dy, uint8_t dist, uint16_t tick) {
+HSV SPLASH_math_boot(HSV hsv, int16_t dx, int16_t dy, uint8_t dist, uint16_t tick) {
     uint16_t effect = tick - dist;
     if (effect > 255) effect = 255;
     hsv.h += effect;
     hsv.v = qadd8(hsv.v, 255 - effect);
     return hsv;
-} // End of splash math functions
+}
 
 // Boot animation, run only if RGB_MATRIX_ENABLED is defined and if the matrix is enabled.
-void rgb_matrix_boot_anim(uint8_t boot_anim) {
+void rgb_matrix_boot_anim_starter(BOOT_ANIMATION *boot, uint8_t originx, uint8_t originy) {
     #if defined(RGB_MATRIX_ENABLE)
         if (rgb_matrix_config.enable) {
-            rgb_matrix_sethsv_noeeprom( rgb_matrix_config.hsv.h, 255, RGB_MATRIX_MAXIMUM_BRIGHTNESS);
-            rgb_matrix_set_speed_noeeprom(64);
-
-            boot_timer = timer_read();
-            boot_status = boot_anim;
+            boot->status     = true;
+            boot->timer      = timer_read();
+            boot->origin.x   = originx;
+            boot->origin.y   = originy;
         }
     #endif
-} // End of boot animation
+}
 
-//===============Custom Functions End=====================//
+void rgb_matrix_boot_anim_runner(BOOT_ANIMATION *boot,uint8_t led_min,uint8_t led_max) {
+    for (uint8_t i = led_min; i < led_max; i++) {
+        HSV hsv = rgb_matrix_config.hsv;
+        hsv.s   = 255;
+        hsv.v   = 0;
+        for (uint8_t j = 0; j < 1; j++) {
+            int16_t  dx   = g_led_config.point[i].x - boot->origin.x;     // X origin of splash animation
+            int16_t  dy   = g_led_config.point[i].y - boot->origin.y;     // y origin of splash animation
+            uint8_t  dist = sqrt16(dx * dx + dy * dy);
+            uint16_t tick = scale16by8(timer_elapsed(boot->timer), qadd8(64, 1));
+            hsv           = SPLASH_math_boot(hsv, dx, dy, dist, tick);
+        }
+        hsv.v   = scale8(hsv.v, RGB_MATRIX_MAXIMUM_BRIGHTNESS);
+        RGB rgb = hsv_to_rgb(hsv);
+        rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
+    }
+}
+
+void rgb_matrix_boot_anim_end (BOOT_ANIMATION *boot) {
+    boot->status = false;
+    boot->timer = 0;
+}
+
+BOOT_ANIMATION boot_anim;
+bool           rgb_mod_flag;
 
 //==============Layer indicator code==============//
 layer_state_t layer_state_set_kb(layer_state_t state) {
@@ -199,55 +209,14 @@ layer_state_t layer_state_set_kb(layer_state_t state) {
 }
 
 bool rgb_matrix_indicators_advanced_rgb(uint8_t led_min, uint8_t led_max) {
-    // Boot animation
-    void rgb_matrix_boot_anim_runner(uint8_t originx, uint8_t originy) {
-        for (uint8_t i = led_min; i < led_max; i++) {
-                    HSV hsv = rgb_matrix_config.hsv;
-                    hsv.v   = 0;
-                    for (uint8_t j = 0; j < 1; j++) {
-                        int16_t  dx   = g_led_config.point[i].x - originx;     // X origin of splash animation
-                        int16_t  dy   = g_led_config.point[i].y - originy;     // y origin of splash animation
-                        uint8_t  dist = sqrt16(dx * dx + dy * dy);
-                        uint16_t tick = scale16by8(timer_elapsed(boot_timer), qadd8(rgb_matrix_config.speed, 1));
-                        hsv           = SPLASH_math2(hsv, dx, dy, dist, tick);
-                    }
-                    hsv.v   = scale8(hsv.v, rgb_matrix_config.hsv.v);
-                    RGB rgb = hsv_to_rgb(hsv);
-                    rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
-                }
+    // Start boot animation
+    if (boot_anim.status && boot_anim.timer > 0) {
+        if (timer_elapsed(boot_anim.timer) < STARTUP_ANIM_TIME) {
+            rgb_matrix_boot_anim_runner(&boot_anim, led_min, led_max);
+        } else {
+            rgb_matrix_boot_anim_end(&boot_anim);
+        }
     }
-
-     // Boot animation Code
-    switch(boot_status) {
-    case 1:
-        if (timer_elapsed(boot_timer) >= STARTUP_ANIM_TIME) {       // If timer is > boot animation time, load the saved RGB mode and settings
-            eeprom_read_block(&rgb_matrix_config, EECONFIG_RGB_MATRIX, sizeof(rgb_matrix_config));
-
-            rgb_matrix_sethsv_noeeprom( rgb_matrix_config.hsv.h, rgb_matrix_config.hsv.s, rgb_matrix_config.hsv.v); // Reset HSV.v to original value
-            rgb_matrix_set_speed_noeeprom(rgb_matrix_config.speed);                                                 // Reset speed to original value
-            rgb_matrix_mode_noeeprom(rgb_matrix_config.mode);                                                       // Load original mode
-
-            // Finish boot
-            boot_status = 0;
-        } else {                                                                                                // Otherwise, run boot animation
-            rgb_matrix_boot_anim_runner(BOOT_ANIM_X,BOOT_ANIM_Y);
-        }
-        break;
-    case 2:
-        if (timer_elapsed(boot_timer) >= STARTUP_ANIM_TIME) {                                                   // If timer is > boot animation time, load the saved RGB mode and fade in
-            eeprom_read_block(&rgb_matrix_config, EECONFIG_RGB_MATRIX, sizeof(rgb_matrix_config));
-
-            rgb_matrix_sethsv_noeeprom( rgb_matrix_config.hsv.h, rgb_matrix_config.hsv.s, rgb_matrix_config.hsv.v); // Reset HSV.v to original value
-            rgb_matrix_set_speed_noeeprom(rgb_matrix_config.speed);                                                 // Reset speed to original value
-            rgb_matrix_mode_noeeprom(rgb_matrix_config.mode);                                                       // Load original mode
-
-            // Finish boot
-            boot_status = 0;
-        } else {                                                                                                // Otherwise, run boot animation
-            rgb_matrix_boot_anim_runner(112,64);
-        }
-        break;
-    }   // End boot animation code
 
     // Layer indicator code
     if (get_highest_layer(layer_state) > 0 && !rgb_mod_flag) {
@@ -353,7 +322,7 @@ bool rgb_matrix_indicators_advanced_rgb(uint8_t led_min, uint8_t led_max) {
     } // End of layer indicator code
 
     // Caps/num lock indicators
-    if (boot_status == 0) {
+    if (!boot_anim.status) {
         #ifdef CAPS_LED
             if (host_keyboard_led_state().caps_lock) {
                 HSV hsv = rgb_matrix_config.hsv;
@@ -392,7 +361,7 @@ bool rgb_matrix_indicators_advanced_rgb(uint8_t led_min, uint8_t led_max) {
 void keyboard_post_init_rgb(void) {
     // Fade in RGB when first plugging in kb or on resume from sleep
     #if (defined (RGB_MATRIX_ENABLE))
-        rgb_matrix_boot_anim(1);
+        rgb_matrix_boot_anim_starter(&boot_anim, BOOT_ANIM_X, BOOT_ANIM_Y);
     #endif
 }
 
@@ -403,7 +372,7 @@ void suspend_power_down_rgb(void) {
 void suspend_wakeup_init_rgb(void) {
     // Fade in RGB when first plugging in kb or on resume from sleep
     #if (defined (RGB_MATRIX_ENABLE))
-        rgb_matrix_boot_anim(1);
+        rgb_matrix_boot_anim_starter(&boot_anim, BOOT_ANIM_X, BOOT_ANIM_Y);
     #endif
 }
 //=======RGB init/suspend functions End=======//
@@ -420,7 +389,7 @@ bool process_record_rgb(uint16_t keycode, keyrecord_t *record) {
         case MON_OFF:
             if (!record->event.pressed) {
                 #if defined(RGB_MATRIX_ENABLE)
-                    rgb_matrix_boot_anim(2);
+                    //rgb_matrix_boot_anim(2);
                 #endif
             }
             return true;
@@ -456,6 +425,9 @@ bool process_record_rgb(uint16_t keycode, keyrecord_t *record) {
                 }
             #endif
             return false;
+        case KC_SLEP:
+            rgb_matrix_boot_anim_starter(&boot_anim, 224, 0);
+            return true;
         default:
             return true;
     }
