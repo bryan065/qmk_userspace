@@ -43,12 +43,8 @@ typedef struct BOOT_ANIMATION {
     } origin;
 } BOOT_ANIMATION;
 
-#ifdef LAYER_STATE_8BIT
-    extern struct RGB_INDICATOR indicator_matrix[8];
-    extern struct RGB_INDICATOR indicator_underglow[8];
-#else
-#   error Only supports up to 8 layers for now.
-#endif
+extern struct RGB_INDICATOR indicator_matrix[8];
+extern struct RGB_INDICATOR indicator_underglow[8];
 
 #define STARTUP_ANIM_TIME 2500
 

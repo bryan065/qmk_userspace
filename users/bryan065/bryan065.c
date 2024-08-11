@@ -225,11 +225,6 @@ void keyboard_post_init_user(void) {
                             dynamic_keymap_set_keycode(_BASE, row, col, MAG_UP);
                         #endif
                         break;
-                    case KC_RSFT:       // Replace KC_RSFT with MAG_UP on _BASE layer if MAGIC_KC_UP is enabled
-                        #ifdef MAGIC_KC_UP
-                            dynamic_keymap_set_keycode(_BASE, row, col, MAG_UP);
-                        #endif
-                        break;
                 }
             }
         }

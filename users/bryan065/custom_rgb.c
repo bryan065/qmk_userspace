@@ -338,6 +338,7 @@ bool rgb_matrix_indicators_advanced_rgb(uint8_t led_min, uint8_t led_max) {
             }
         #endif
 
+
         #ifdef NUMLK_LED
             if (host_keyboard_led_state().num_lock) {
                 HSV hsv = rgb_matrix_config.hsv;
