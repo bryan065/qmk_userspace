@@ -1,7 +1,8 @@
 {
-    "userspace_version": "1.0",
+    "userspace_version": "1.1",
     "build_targets": [
         ["dz60", "unicorn"],
-        ["kbdfans/kbd67/mkii_soldered", "cyber77"]
+        ["kbdfans/kbd67/mkii_soldered", "cyber77"],
+        ["durgod/dgk6x/hades_ansi", "bryan065"]
     ]
 }
