@@ -7,7 +7,7 @@ RGB_MATRIX_DRIVER = ws2812
 # Stock keyboard feature disable
 BACKLIGHT_ENABLE = no
 
+# Userspace code
 USER_NAME := bryan065
-SRC += \
-	bryan065.c \
-	custom_rgb.c
+INTROSPECTION_KEYMAP_C = bryan065.c
+SRC +=  custom_rgb.c
